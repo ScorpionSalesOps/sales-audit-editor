@@ -17,6 +17,11 @@ const SECTION_ANCHORS: Record<string, string> = {
   cta: '#cta-banner',
 }
 
+function buildBlobUrl(html: string) {
+  const blob = new Blob([html], { type: 'text/html' })
+  return URL.createObjectURL(blob)
+}
+
 export default function BriefPage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string | null>(null)
   const [brief, setBrief] = useState<Brief | null>(null)
@@ -25,6 +30,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState<string>('exec_summary')
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -37,30 +43,15 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   }, [id])
 
   useEffect(() => {
-    const anchor = SECTION_ANCHORS[activeSection]
-    if (anchor && iframeRef.current) {
-      try {
-        iframeRef.current.contentWindow?.location.replace(
-          (iframeRef.current.src.split('#')[0]) + anchor
-        )
-      } catch {}
+    if (brief?.edited_html) {
+      const url = buildBlobUrl(brief.edited_html)
+      setBlobUrl(url)
+      return () => URL.revokeObjectURL(url)
     }
-    sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [activeSection])
+  }, [brief?.edited_html])
 
-  // Poll iframe hash to sync editor when user clicks brief nav
   useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        const hash = iframeRef.current?.contentWindow?.location.hash
-        if (!hash) return
-        const match = Object.entries(SECTION_ANCHORS).find(([, anchor]) => anchor === hash)
-        if (match && match[0] !== activeSection) {
-          setActiveSection(match[0])
-        }
-      } catch {}
-    }, 400)
-    return () => clearInterval(interval)
+    sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [activeSection])
 
   async function fetchBrief() {
@@ -93,8 +84,14 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
       }
     }
 
+    // Update edited_html by replacing old value with new value
+    const updatedHtml = brief.edited_html
+      ? brief.edited_html.replace(oldValue, newValue)
+      : brief.edited_html
+
     await supabase.from('briefs').update({
       sections: updatedSections,
+      edited_html: updatedHtml,
       updated_at: new Date().toISOString()
     }).eq('id', brief.id)
 
@@ -107,7 +104,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
       new_value: newValue
     })
 
-    setBrief({ ...brief, sections: updatedSections })
+    setBrief({ ...brief, sections: updatedSections, edited_html: updatedHtml })
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -116,18 +113,35 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   async function toggleSection(sectionKey: string) {
     if (!brief) return
     const current = brief.sections[sectionKey]?.hidden ?? false
-    const updatedSections = {
-      ...brief.sections,
-      [sectionKey]: {
-        ...brief.sections[sectionKey],
-        hidden: !current
+    const anchor = SECTION_ANCHORS[sectionKey]
+
+    let updatedHtml = brief.edited_html ?? ''
+    if (anchor && updatedHtml) {
+      if (!current) {
+        // Hide: wrap section in a hidden div
+        updatedHtml = updatedHtml.replace(
+          new RegExp(`(<section[^>]*id="${anchor.slice(1)}"[^>]*>)`),
+          '$1<div style="display:none" data-hidden="true">'
+        )
+      } else {
+        // Show: remove hidden wrapper
+        updatedHtml = updatedHtml.replace(/<div style="display:none" data-hidden="true">/g, '')
+        updatedHtml = updatedHtml.replace(/data-hidden-end>/g, '')
       }
     }
+
+    const updatedSections = {
+      ...brief.sections,
+      [sectionKey]: { ...brief.sections[sectionKey], hidden: !current }
+    }
+
     await supabase.from('briefs').update({
       sections: updatedSections,
+      edited_html: updatedHtml,
       updated_at: new Date().toISOString()
     }).eq('id', brief.id)
-    setBrief({ ...brief, sections: updatedSections })
+
+    setBrief({ ...brief, sections: updatedSections, edited_html: updatedHtml })
   }
 
   if (loading) {
@@ -162,7 +176,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
     { key: 'cta', label: 'CTA Banner' },
   ]
 
-  const briefUrl = `https://${brief!.client_slug}.netlify.app`
+  const hasHtml = !!brief!.edited_html
 
   return (
     <div className="h-screen bg-gray-950 flex flex-col">
@@ -175,7 +189,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
           {saving && <span className="text-gray-400 text-xs">Saving...</span>}
           {saved && <span className="text-green-400 text-xs">Saved</span>}
           <a
-            href={briefUrl}
+            href={`https://${brief!.client_slug}.netlify.app`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
@@ -188,18 +202,24 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Brief preview */}
         <div className="w-[62%] flex-shrink-0 border-r border-gray-800 overflow-hidden">
-          <iframe
-            ref={iframeRef}
-            src={briefUrl}
-            className="w-full h-full"
-            title="Brief Preview"
-          />
+          {hasHtml && blobUrl ? (
+            <iframe
+              ref={iframeRef}
+              src={blobUrl}
+              className="w-full h-full"
+              title="Brief Preview"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-600 text-sm">
+              Brief HTML not uploaded yet.
+            </div>
+          )}
         </div>
 
         {/* Right: Editor panel */}
         <div className="flex-1 overflow-y-auto bg-gray-950">
           <div className="p-4 space-y-3">
-            <p className="text-gray-500 text-xs mb-4">Click a section to jump to it in the preview. Toggle visibility or edit text fields.</p>
+            <p className="text-gray-500 text-xs mb-4">Click a section to jump to it. Toggle visibility or edit text fields.</p>
 
             {sections.map((section) => {
               const sectionData = brief!.sections[section.key]

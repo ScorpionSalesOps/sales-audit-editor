@@ -9,6 +9,8 @@ export type Brief = {
   expires_at: string | null
   published: boolean
   sections: Record<string, BriefSection>
+  original_html: string | null
+  edited_html: string | null
 }
 
 export type BriefSection = {
