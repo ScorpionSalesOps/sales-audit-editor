@@ -17,8 +17,36 @@ const SECTION_ANCHORS: Record<string, string> = {
   cta: '#cta-banner',
 }
 
+const SECTION_IDS = ['exec-summary','ai-visibility','reputation','social','community','paid-presence','keywords','comm-channels','opportunities']
+
 function buildIframeHtml(html: string) {
-  return html.replace('</head>', `<style>html { zoom: 0.82; }</style></head>`)
+  const script = `
+<script>
+(function(){
+  var ids = ${JSON.stringify(SECTION_IDS)};
+  function scrollTop(){
+    return window.scrollY||window.pageYOffset||document.documentElement.scrollTop||document.body.scrollTop||0;
+  }
+  function getActive(){
+    var top = scrollTop();
+    var active = ids[0];
+    ids.forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      var abs = el.getBoundingClientRect().top + top;
+      if(abs <= top + 200) active = id;
+    });
+    window.parent.postMessage({briefSection: active}, '*');
+  }
+  // Listen everywhere — different browsers use different scroll containers
+  window.addEventListener('scroll', getActive, {passive:true});
+  document.addEventListener('scroll', getActive, {passive:true, capture:true});
+  document.body.addEventListener('scroll', getActive, {passive:true});
+  document.documentElement.addEventListener('scroll', getActive, {passive:true});
+  setTimeout(getActive, 800);
+})();
+<\/script>`
+  return html.replace('</body>', script + '</body>')
 }
 
 export default function BriefPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +58,6 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState<string>('exec_summary')
   const [iframeHtml, setIframeHtml] = useState<string | null>(null)
-  const [iframeReady, setIframeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -43,43 +70,27 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   }, [id])
 
   useEffect(() => {
-    setIframeReady(false)
     if (brief?.edited_html) {
       setIframeHtml(buildIframeHtml(brief.edited_html))
     }
   }, [brief?.edited_html])
 
-  // When activeSection changes (from scroll observer), scroll the right panel
+  // Listen for section updates posted from inside the iframe
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (!e.data?.briefSection) return
+      const anchor = '#' + e.data.briefSection
+      const key = Object.entries(SECTION_ANCHORS).find(([, a]) => a === anchor)?.[0]
+      if (key) setActiveSection(key)
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
+  // Scroll right panel when active section changes
   useEffect(() => {
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [activeSection])
-
-  // Once iframe is ready, set up IntersectionObserver to track which section is visible
-  useEffect(() => {
-    if (!iframeReady || !iframeRef.current?.contentDocument) return
-    const doc = iframeRef.current.contentDocument
-    const win = iframeRef.current.contentWindow as Window & typeof globalThis
-
-    const observer = new win.IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const id = (entry.target as Element).id
-            const key = Object.entries(SECTION_ANCHORS).find(([, anchor]) => anchor === `#${id}`)?.[0]
-            if (key) setActiveSection(key)
-          }
-        }
-      },
-      { threshold: 0.4 }
-    )
-
-    Object.values(SECTION_ANCHORS).forEach(anchor => {
-      const el = doc.querySelector(anchor)
-      if (el) observer.observe(el)
-    })
-
-    return () => observer.disconnect()
-  }, [iframeReady])
 
   async function fetchBrief() {
     const { data, error } = await supabase
@@ -237,7 +248,6 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
             <iframe
               ref={iframeRef}
               srcDoc={iframeHtml}
-              onLoad={() => setIframeReady(true)}
               className="w-full h-full"
               title="Brief Preview"
             />
