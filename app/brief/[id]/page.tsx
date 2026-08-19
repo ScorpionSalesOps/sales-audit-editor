@@ -18,7 +18,10 @@ const SECTION_ANCHORS: Record<string, string> = {
 }
 
 function buildBlobUrl(html: string) {
-  const blob = new Blob([html], { type: 'text/html' })
+  const injected = html
+    .replace('</head>', `<style>html { zoom: 0.82; }</style></head>`)
+    .replace('</body>', `<script>window.addEventListener('message',function(e){if(e.data&&e.data.scrollTo){var el=document.querySelector(e.data.scrollTo);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}});</script></body>`)
+  const blob = new Blob([injected], { type: 'text/html' })
   return URL.createObjectURL(blob)
 }
 
@@ -52,21 +55,9 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    // Scroll iframe to section (blob URLs are same-origin so contentWindow is accessible)
     const anchor = SECTION_ANCHORS[activeSection]
-    if (anchor && iframeRef.current) {
-      const scrollIframe = () => {
-        try {
-          const el = iframeRef.current?.contentDocument?.querySelector(anchor)
-          el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        } catch {}
-      }
-      // Try immediately in case iframe already loaded, else wait for load
-      if (iframeRef.current.contentDocument?.readyState === 'complete') {
-        scrollIframe()
-      } else {
-        iframeRef.current.addEventListener('load', scrollIframe, { once: true })
-      }
+    if (anchor && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ scrollTo: anchor }, '*')
     }
   }, [activeSection])
 
