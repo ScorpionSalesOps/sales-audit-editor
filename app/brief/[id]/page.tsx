@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Brief } from '@/lib/types'
 
-export default function BriefPage({ params }: { params: { id: string } }) {
+export default function BriefPage({ params }: { params: Promise<{ id: string }> }) {
+  const [id, setId] = useState<string | null>(null)
   const [brief, setBrief] = useState<Brief | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -12,14 +13,18 @@ export default function BriefPage({ params }: { params: { id: string } }) {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    fetchBrief()
-  }, [params.id])
+    params.then(p => setId(p.id))
+  }, [])
+
+  useEffect(() => {
+    if (id) fetchBrief()
+  }, [id])
 
   async function fetchBrief() {
     const { data, error } = await supabase
       .from('briefs')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error || !data) {
