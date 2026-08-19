@@ -34,6 +34,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState<string>('exec_summary')
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [iframeReady, setIframeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -46,6 +47,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   }, [id])
 
   useEffect(() => {
+    setIframeReady(false)
     if (brief?.edited_html) {
       const url = buildBlobUrl(brief.edited_html)
       setBlobUrl(url)
@@ -55,11 +57,16 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    const anchor = SECTION_ANCHORS[activeSection]
-    if (anchor && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ scrollTo: anchor }, '*')
-    }
-  }, [activeSection])
+    scrollIframeTo(activeSection)
+  }, [activeSection, iframeReady])
+
+  function scrollIframeTo(sectionKey: string) {
+    if (!iframeReady) return
+    const anchor = SECTION_ANCHORS[sectionKey]
+    if (!anchor || !iframeRef.current?.contentDocument) return
+    const el = iframeRef.current.contentDocument.querySelector(anchor)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   async function fetchBrief() {
     const { data, error } = await supabase
@@ -217,6 +224,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
             <iframe
               ref={iframeRef}
               src={blobUrl}
+              onLoad={() => setIframeReady(true)}
               className="w-full h-full"
               title="Brief Preview"
             />
