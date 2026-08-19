@@ -173,7 +173,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Brief preview */}
-        <div className="w-[55%] flex-shrink-0 border-r border-gray-800 overflow-hidden">
+        <div className="w-[62%] flex-shrink-0 border-r border-gray-800 overflow-hidden">
           <iframe
             ref={iframeRef}
             src={briefUrl}
@@ -197,7 +197,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                 <div
                   key={section.key}
                   ref={el => { sectionRefs.current[section.key] = el }}
-                  className={`bg-gray-900 border rounded-xl overflow-hidden transition-all ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
+                  className={`bg-gray-900 border rounded-xl overflow-hidden transition-all min-h-[calc(100vh-120px)] flex flex-col ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
                 >
                   <div
                     className="flex items-center justify-between px-4 py-3 cursor-pointer"
