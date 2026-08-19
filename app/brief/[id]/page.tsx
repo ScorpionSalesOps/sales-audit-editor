@@ -1,8 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Brief } from '@/lib/types'
+
+const SECTION_ANCHORS: Record<string, string> = {
+  exec_summary: '#exec-summary',
+  ai_visibility: '#ai-visibility',
+  reputation: '#reputation',
+  social: '#social',
+  community: '#community',
+  paid_presence: '#paid-presence',
+  keywords: '#keywords',
+  comm_channels: '#comm-channels',
+  the_fix: '#opportunities',
+  cta: '#cta-banner',
+}
 
 export default function BriefPage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string | null>(null)
@@ -11,6 +24,8 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [notFound, setNotFound] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [activeSection, setActiveSection] = useState<string>('exec_summary')
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -19,6 +34,17 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     if (id) fetchBrief()
   }, [id])
+
+  useEffect(() => {
+    const anchor = SECTION_ANCHORS[activeSection]
+    if (anchor && iframeRef.current) {
+      try {
+        iframeRef.current.contentWindow?.location.replace(
+          (iframeRef.current.src.split('#')[0]) + anchor
+        )
+      } catch {}
+    }
+  }, [activeSection])
 
   async function fetchBrief() {
     const { data, error } = await supabase
@@ -119,9 +145,11 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
     { key: 'cta', label: 'CTA Banner' },
   ]
 
+  const briefUrl = `https://${brief!.client_slug}.netlify.app`
+
   return (
-    <div className="min-h-screen bg-gray-950">
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between sticky top-0 bg-gray-950 z-10">
+    <div className="h-screen bg-gray-950 flex flex-col">
+      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-white font-semibold">{brief!.client_name}</h1>
           <div className="text-gray-500 text-xs mt-0.5">{brief!.prospect_url}</div>
@@ -130,61 +158,83 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
           {saving && <span className="text-gray-400 text-xs">Saving...</span>}
           {saved && <span className="text-green-400 text-xs">Saved</span>}
           <a
-            href={`https://${brief!.client_slug}.netlify.app`}
+            href={briefUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
           >
-            View Live Brief
+            Open Live Brief
           </a>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-10 space-y-4">
-        <p className="text-gray-400 text-sm mb-6">Edit section text or hide sections that are not relevant to this prospect.</p>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Brief preview */}
+        <div className="flex-1 border-r border-gray-800 overflow-hidden">
+          <iframe
+            ref={iframeRef}
+            src={briefUrl}
+            className="w-full h-full"
+            title="Brief Preview"
+          />
+        </div>
 
-        {sections.map((section) => {
-          const sectionData = brief!.sections[section.key]
-          const isHidden = sectionData?.hidden ?? false
-          const fields = sectionData?.fields ?? {}
+        {/* Right: Editor panel */}
+        <div className="w-96 flex-shrink-0 overflow-y-auto bg-gray-950">
+          <div className="p-4 space-y-3">
+            <p className="text-gray-500 text-xs mb-4">Click a section to jump to it in the preview. Toggle visibility or edit text fields.</p>
 
-          return (
-            <div key={section.key} className={`bg-gray-900 border rounded-xl overflow-hidden transition-all ${isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}>
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="text-white font-medium text-sm">{section.label}</span>
-                <button
-                  onClick={() => toggleSection(section.key)}
-                  className={`text-xs px-3 py-1 rounded-full transition-colors ${isHidden ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+            {sections.map((section) => {
+              const sectionData = brief!.sections[section.key]
+              const isHidden = sectionData?.hidden ?? false
+              const fields = sectionData?.fields ?? {}
+              const isActive = activeSection === section.key
+
+              return (
+                <div
+                  key={section.key}
+                  className={`bg-gray-900 border rounded-xl overflow-hidden transition-all ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
                 >
-                  {isHidden ? 'Hidden' : 'Visible'}
-                </button>
-              </div>
+                  <div
+                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                    onClick={() => setActiveSection(section.key)}
+                  >
+                    <span className="text-white font-medium text-sm">{section.label}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSection(section.key) }}
+                      className={`text-xs px-2.5 py-1 rounded-full transition-colors ${isHidden ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                    >
+                      {isHidden ? 'Hidden' : 'Visible'}
+                    </button>
+                  </div>
 
-              {!isHidden && Object.keys(fields).length > 0 && (
-                <div className="px-5 pb-5 space-y-3 border-t border-gray-800 pt-4">
-                  {Object.entries(fields).map(([field, value]) => (
-                    <div key={field}>
-                      <label className="text-gray-500 text-xs mb-1 block capitalize">{field.replace(/_/g, ' ')}</label>
-                      <textarea
-                        defaultValue={value}
-                        onBlur={(e) => saveSection(section.key, field, value, e.target.value)}
-                        rows={2}
-                        className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-gray-500 resize-none"
-                      />
+                  {isActive && !isHidden && Object.keys(fields).length > 0 && (
+                    <div className="px-4 pb-4 space-y-3 border-t border-gray-800 pt-3">
+                      {Object.entries(fields).map(([field, value]) => (
+                        <div key={field}>
+                          <label className="text-gray-500 text-xs mb-1 block capitalize">{field.replace(/_/g, ' ')}</label>
+                          <textarea
+                            defaultValue={value}
+                            onBlur={(e) => saveSection(section.key, field, value, e.target.value)}
+                            rows={2}
+                            className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-gray-500 resize-none"
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
 
-              {!isHidden && Object.keys(fields).length === 0 && (
-                <div className="px-5 pb-4 text-gray-600 text-xs border-t border-gray-800 pt-3">
-                  No editable fields in this section yet.
+                  {isActive && !isHidden && Object.keys(fields).length === 0 && (
+                    <div className="px-4 pb-3 text-gray-600 text-xs border-t border-gray-800 pt-3">
+                      No editable fields in this section.
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </main>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
