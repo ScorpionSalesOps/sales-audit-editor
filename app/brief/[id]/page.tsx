@@ -45,8 +45,22 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
         )
       } catch {}
     }
-    // scroll editor panel to active section
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [activeSection])
+
+  // Poll iframe hash to sync editor when user clicks brief nav
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const hash = iframeRef.current?.contentWindow?.location.hash
+        if (!hash) return
+        const match = Object.entries(SECTION_ANCHORS).find(([, anchor]) => anchor === hash)
+        if (match && match[0] !== activeSection) {
+          setActiveSection(match[0])
+        }
+      } catch {}
+    }, 400)
+    return () => clearInterval(interval)
   }, [activeSection])
 
   async function fetchBrief() {
@@ -197,7 +211,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                 <div
                   key={section.key}
                   ref={el => { sectionRefs.current[section.key] = el }}
-                  className={`bg-gray-900 border rounded-xl overflow-hidden transition-all min-h-[calc(100vh-120px)] flex flex-col ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
+                  className={`bg-gray-900 border rounded-xl overflow-hidden transition-all ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
                 >
                   <div
                     className="flex items-center justify-between px-4 py-3 cursor-pointer"
@@ -212,7 +226,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                     </button>
                   </div>
 
-                  {isActive && !isHidden && Object.keys(fields).length > 0 && (
+                  {!isHidden && Object.keys(fields).length > 0 && (
                     <div className="px-4 pb-4 space-y-3 border-t border-gray-800 pt-3">
                       {Object.entries(fields).map(([field, value]) => (
                         <div key={field}>
@@ -228,7 +242,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                     </div>
                   )}
 
-                  {isActive && !isHidden && Object.keys(fields).length === 0 && (
+                  {!isHidden && Object.keys(fields).length === 0 && (
                     <div className="px-4 pb-3 text-gray-600 text-xs border-t border-gray-800 pt-3">
                       No editable fields in this section.
                     </div>
