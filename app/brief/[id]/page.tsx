@@ -49,18 +49,37 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
     }
   }, [brief?.edited_html])
 
+  // When activeSection changes (from scroll observer), scroll the right panel
   useEffect(() => {
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    scrollIframeTo(activeSection)
-  }, [activeSection, iframeReady])
+  }, [activeSection])
 
-  function scrollIframeTo(sectionKey: string) {
-    if (!iframeReady) return
-    const anchor = SECTION_ANCHORS[sectionKey]
-    if (!anchor || !iframeRef.current?.contentDocument) return
-    const el = iframeRef.current.contentDocument.querySelector(anchor)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  // Once iframe is ready, set up IntersectionObserver to track which section is visible
+  useEffect(() => {
+    if (!iframeReady || !iframeRef.current?.contentDocument) return
+    const doc = iframeRef.current.contentDocument
+    const win = iframeRef.current.contentWindow as Window & typeof globalThis
+
+    const observer = new win.IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = (entry.target as Element).id
+            const key = Object.entries(SECTION_ANCHORS).find(([, anchor]) => anchor === `#${id}`)?.[0]
+            if (key) setActiveSection(key)
+          }
+        }
+      },
+      { threshold: 0.4 }
+    )
+
+    Object.values(SECTION_ANCHORS).forEach(anchor => {
+      const el = doc.querySelector(anchor)
+      if (el) observer.observe(el)
+    })
+
+    return () => observer.disconnect()
+  }, [iframeReady])
 
   async function fetchBrief() {
     const { data, error } = await supabase
@@ -259,7 +278,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                     </button>
                   </div>
 
-                  {!isHidden && Object.keys(fields).length > 0 && (
+                  {isActive && !isHidden && Object.keys(fields).length > 0 && (
                     <div className="px-4 pb-4 space-y-3 border-t border-gray-800 pt-3">
                       {Object.entries(fields).map(([field, value]) => (
                         <div key={field}>
@@ -272,12 +291,6 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                           />
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {!isHidden && Object.keys(fields).length === 0 && (
-                    <div className="px-4 pb-3 text-gray-600 text-xs border-t border-gray-800 pt-3">
-                      No editable fields in this section.
                     </div>
                   )}
                 </div>
