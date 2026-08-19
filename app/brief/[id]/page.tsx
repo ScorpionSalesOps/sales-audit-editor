@@ -52,6 +52,22 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Scroll iframe to section (blob URLs are same-origin so contentWindow is accessible)
+    const anchor = SECTION_ANCHORS[activeSection]
+    if (anchor && iframeRef.current) {
+      const scrollIframe = () => {
+        try {
+          const el = iframeRef.current?.contentDocument?.querySelector(anchor)
+          el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } catch {}
+      }
+      // Try immediately in case iframe already loaded, else wait for load
+      if (iframeRef.current.contentDocument?.readyState === 'complete') {
+        scrollIframe()
+      } else {
+        iframeRef.current.addEventListener('load', scrollIframe, { once: true })
+      }
+    }
   }, [activeSection])
 
   async function fetchBrief() {
