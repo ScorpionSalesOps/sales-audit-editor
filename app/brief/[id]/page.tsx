@@ -116,15 +116,36 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   async function toggleSection(sectionKey: string) {
     if (!brief) return
     const current = brief.sections[sectionKey]?.hidden ?? false
+    const anchor = SECTION_ANCHORS[sectionKey]
+    const sectionId = anchor?.slice(1)
+
+    let updatedHtml = brief.edited_html ?? ''
+    if (sectionId && updatedHtml) {
+      if (!current) {
+        // Hide: add display:none to the opening section tag with this id
+        updatedHtml = updatedHtml.replace(
+          new RegExp(`(<section[^>]*id="${sectionId}"[^>]*)(>)`),
+          '$1 style="display:none"$2'
+        )
+      } else {
+        // Show: remove the display:none we added
+        updatedHtml = updatedHtml.replace(
+          new RegExp(`(<section[^>]*id="${sectionId}"[^>]*) style="display:none"(>)`),
+          '$1$2'
+        )
+      }
+    }
+
     const updatedSections = {
       ...brief.sections,
       [sectionKey]: { ...brief.sections[sectionKey], hidden: !current }
     }
     await supabase.from('briefs').update({
       sections: updatedSections,
+      edited_html: updatedHtml,
       updated_at: new Date().toISOString()
     }).eq('id', brief.id)
-    setBrief({ ...brief, sections: updatedSections })
+    setBrief({ ...brief, sections: updatedSections, edited_html: updatedHtml })
   }
 
   function downloadBrief() {
