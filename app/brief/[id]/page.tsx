@@ -26,6 +26,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState<string>('exec_summary')
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -44,6 +45,8 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
         )
       } catch {}
     }
+    // scroll editor panel to active section
+    sectionRefs.current[activeSection]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [activeSection])
 
   async function fetchBrief() {
@@ -170,7 +173,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Brief preview */}
-        <div className="flex-1 border-r border-gray-800 overflow-hidden">
+        <div className="w-[55%] flex-shrink-0 border-r border-gray-800 overflow-hidden">
           <iframe
             ref={iframeRef}
             src={briefUrl}
@@ -180,7 +183,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
         </div>
 
         {/* Right: Editor panel */}
-        <div className="w-96 flex-shrink-0 overflow-y-auto bg-gray-950">
+        <div className="flex-1 overflow-y-auto bg-gray-950">
           <div className="p-4 space-y-3">
             <p className="text-gray-500 text-xs mb-4">Click a section to jump to it in the preview. Toggle visibility or edit text fields.</p>
 
@@ -193,6 +196,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
               return (
                 <div
                   key={section.key}
+                  ref={el => { sectionRefs.current[section.key] = el }}
                   className={`bg-gray-900 border rounded-xl overflow-hidden transition-all ${isActive ? 'border-blue-600' : isHidden ? 'border-gray-800 opacity-50' : 'border-gray-700'}`}
                 >
                   <div
