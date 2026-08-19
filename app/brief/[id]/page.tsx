@@ -17,12 +17,8 @@ const SECTION_ANCHORS: Record<string, string> = {
   cta: '#cta-banner',
 }
 
-function buildBlobUrl(html: string) {
-  const injected = html
-    .replace('</head>', `<style>html { zoom: 0.82; }</style></head>`)
-    .replace('</body>', `<script>window.addEventListener('message',function(e){if(e.data&&e.data.scrollTo){var el=document.querySelector(e.data.scrollTo);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}});</script></body>`)
-  const blob = new Blob([injected], { type: 'text/html' })
-  return URL.createObjectURL(blob)
+function buildIframeHtml(html: string) {
+  return html.replace('</head>', `<style>html { zoom: 0.82; }</style></head>`)
 }
 
 export default function BriefPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,7 +29,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState<string>('exec_summary')
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [iframeHtml, setIframeHtml] = useState<string | null>(null)
   const [iframeReady, setIframeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -49,9 +45,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     setIframeReady(false)
     if (brief?.edited_html) {
-      const url = buildBlobUrl(brief.edited_html)
-      setBlobUrl(url)
-      return () => URL.revokeObjectURL(url)
+      setIframeHtml(buildIframeHtml(brief.edited_html))
     }
   }, [brief?.edited_html])
 
@@ -220,10 +214,10 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Brief preview */}
         <div className="w-[62%] flex-shrink-0 border-r border-gray-800 overflow-hidden">
-          {brief!.edited_html && blobUrl ? (
+          {iframeHtml ? (
             <iframe
               ref={iframeRef}
-              src={blobUrl}
+              srcDoc={iframeHtml}
               onLoad={() => setIframeReady(true)}
               className="w-full h-full"
               title="Brief Preview"
