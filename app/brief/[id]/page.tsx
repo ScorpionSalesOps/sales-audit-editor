@@ -56,7 +56,8 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [notFound, setNotFound] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [activeSection, setActiveSection] = useState<string>('exec_summary')
+  const [activeSection, setActiveSection] = useState<string>('exec_summary') // tracked by scroll
+  const [expandedSection, setExpandedSection] = useState<string | null>(null) // set only by clicking a card
   const [iframeHtml, setIframeHtml] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -279,6 +280,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
               const isHidden = sectionData?.hidden ?? false
               const fields = sectionData?.fields ?? {}
               const isActive = activeSection === section.key
+              const isExpanded = expandedSection === section.key
 
               return (
                 <div
@@ -288,7 +290,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                 >
                   <div
                     className="flex items-center justify-between px-4 py-3 cursor-pointer"
-                    onClick={() => setActiveSection(section.key)}
+                    onClick={() => setExpandedSection(isExpanded ? null : section.key)}
                   >
                     <span className="text-white font-medium text-sm">{section.label}</span>
                     <button
@@ -299,7 +301,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                     </button>
                   </div>
 
-                  {isActive && !isHidden && Object.keys(fields).length > 0 && (
+                  {isExpanded && !isHidden && Object.keys(fields).length > 0 && (
                     <div className="px-4 pb-4 space-y-3 border-t border-gray-800 pt-3">
                       {Object.entries(fields).map(([field, value]) => (
                         <div key={field}>
