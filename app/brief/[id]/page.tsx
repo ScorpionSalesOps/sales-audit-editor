@@ -60,6 +60,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
   const [iframeHtml, setIframeHtml] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const currentValues = useRef<Record<string, Record<string, string>>>({})
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -103,13 +104,23 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
       setNotFound(true)
     } else {
       setBrief(data)
+      // Seed currentValues so re-edits use the latest saved value as oldValue
+      for (const [sk, sv] of Object.entries(data.sections as Brief['sections'])) {
+        currentValues.current[sk] = { ...sv.fields }
+      }
     }
     setLoading(false)
   }
 
-  async function saveSection(sectionKey: string, field: string, oldValue: string, newValue: string) {
-    if (!brief || oldValue === newValue) return
+  async function saveSection(sectionKey: string, field: string, newValue: string) {
+    if (!brief) return
+    const oldValue = currentValues.current[sectionKey]?.[field] ?? ''
+    if (oldValue === newValue) return
     setSaving(true)
+
+    // Update ref immediately so re-edits use the new value as oldValue
+    if (!currentValues.current[sectionKey]) currentValues.current[sectionKey] = {}
+    currentValues.current[sectionKey][field] = newValue
 
     const updatedSections = {
       ...brief.sections,
@@ -295,7 +306,7 @@ export default function BriefPage({ params }: { params: Promise<{ id: string }> 
                           <label className="text-gray-500 text-xs mb-1 block capitalize">{field.replace(/_/g, ' ')}</label>
                           <textarea
                             defaultValue={value}
-                            onBlur={(e) => saveSection(section.key, field, value, e.target.value)}
+                            onBlur={(e) => saveSection(section.key, field, e.target.value)}
                             rows={2}
                             className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-gray-500 resize-none"
                           />
