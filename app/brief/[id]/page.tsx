@@ -38,6 +38,17 @@ function buildIframeHtml(html: string) {
     });
     window.parent.postMessage({briefSection: active}, '*');
   }
+  // Intercept hash link clicks so they scroll within the iframe instead of navigating
+  document.addEventListener('click', function(e){
+    var a = e.target.closest('a');
+    if(!a) return;
+    var href = a.getAttribute('href')||'';
+    if(href.startsWith('#')){
+      e.preventDefault();
+      var t = document.getElementById(href.slice(1));
+      if(t) t.scrollIntoView({behavior:'smooth'});
+    }
+  }, true);
   // Listen everywhere — different browsers use different scroll containers
   window.addEventListener('scroll', getActive, {passive:true});
   document.addEventListener('scroll', getActive, {passive:true, capture:true});
